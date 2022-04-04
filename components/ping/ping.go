@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net"
+	"time"
 )
 
 type PingServer struct {
@@ -33,7 +34,7 @@ type data struct {
 		Name     string `json:"name"`
 		Protocol int    `json:"protocol"`
 	} `json:"version"`
-	Ping uint16
+	Ping time.Duration
 }
 
 func (PS *PingServer) NewPing(ip, port string) error {
@@ -49,7 +50,8 @@ func (PS *PingServer) GetConnect() error {
 }
 
 func (PS *PingServer) RequestInfoAndUnmarshall() error {
-	bytes, err := requestServerInfo(PS.connect, PS.Address)
+	bytes, ping, err := requestServerInfo(PS.connect, PS.Address)
+	PS.ServerData.Ping = ping
 	if err != nil {
 		return err
 	}
@@ -106,25 +108,29 @@ func toVarint(x uint64) []byte {
 	return bytes[0:n]
 }
 
-func requestServerInfo(conn *net.TCPConn, addr *net.TCPAddr) ([]byte, error) {
+func requestServerInfo(conn *net.TCPConn, addr *net.TCPAddr) ([]byte, time.Duration, error) {
 	defer conn.Close()
+	stopwatchStart := time.Now()
 	//handshake
 	_, err := conn.Write(buildHandshake(addr).Bytes())
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	//request data
 	_, err = conn.Write([]byte{0x01, 0x00})
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
+	//read response message length
 	reply := make([]byte, 5)
 	_, err = conn.Read(reply)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
+	//read response message
 	bytesToRead, _ := binary.Uvarint(reply)
 	reply = make([]byte, bytesToRead-3)
 	_, err = conn.Read(reply)
-	return reply, err
+	stopwatch := time.Since(stopwatchStart)
+	return reply, stopwatch, err
 }
