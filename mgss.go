@@ -9,7 +9,7 @@ import (
 func main() {
 	PingServer := ping.PingServer{}
 
-	if !checkErr(PingServer.NewPing("ip", "port")) {
+	if !checkErr(PingServer.NewPing("kek", "53777")) {
 		return
 	}
 	if !checkErr(PingServer.GetConnect()) {
