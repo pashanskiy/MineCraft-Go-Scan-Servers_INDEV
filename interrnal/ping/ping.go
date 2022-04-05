@@ -5,17 +5,19 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
+	"regexp"
+	"strings"
 	"time"
 )
 
 type PingServer struct {
-	Address    *net.TCPAddr
-	ServerData data
-	connect    *net.TCPConn
+	Address *net.TCPAddr
+	connect *net.TCPConn
 }
 
-type data struct {
+type ServerData struct {
 	Description struct {
 		Extra []struct {
 			Text string `json:"text"`
@@ -34,12 +36,23 @@ type data struct {
 		Name     string `json:"name"`
 		Protocol int    `json:"protocol"`
 	} `json:"version"`
-	Ping time.Duration
+	Ping int64
 }
 
 func (PS *PingServer) NewPing(ip, port string) error {
 	var err error
-	PS.Address, err = net.ResolveTCPAddr("tcp", ip+":"+port)
+
+	if validIP4(ip) {
+		PS.Address, err = net.ResolveTCPAddr("tcp", ip+":"+port)
+		return err
+	}
+	ips, _ := net.LookupIP(ip)
+	for _, ip := range ips {
+		if ipv4 := ip.To4(); ipv4 != nil {
+			fmt.Println("IPv4: ", ipv4)
+			PS.Address, err = net.ResolveTCPAddr("tcp", ipv4.String()+":"+port)
+		}
+	}
 	return err
 }
 
@@ -49,15 +62,22 @@ func (PS *PingServer) GetConnect() error {
 	return err
 }
 
-func (PS *PingServer) RequestInfoAndUnmarshall() error {
+func (PS *PingServer) RequestInfoAndUnmarshall() (ServerData, error) {
 	bytes, ping, err := requestServerInfo(PS.connect, PS.Address)
-	PS.ServerData.Ping = ping
+	ServerData := ServerData{}
+	ServerData.Ping = ping
 	if err != nil {
-		return err
+		return ServerData, err
 	}
 
-	err = json.Unmarshal(bytes, &PS.ServerData)
-	return err
+	err = json.Unmarshal(bytes, &ServerData)
+	return ServerData, err
+}
+
+func validIP4(ipAddress string) bool {
+	ipAddress = strings.Trim(ipAddress, " ")
+	re, _ := regexp.Compile(`^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$`)
+	return re.MatchString(ipAddress) 
 }
 
 func getTCPConnect(tcpAddr *net.TCPAddr) (*net.TCPConn, error) {
@@ -108,7 +128,7 @@ func toVarint(x uint64) []byte {
 	return bytes[0:n]
 }
 
-func requestServerInfo(conn *net.TCPConn, addr *net.TCPAddr) ([]byte, time.Duration, error) {
+func requestServerInfo(conn *net.TCPConn, addr *net.TCPAddr) ([]byte, int64, error) {
 	defer conn.Close()
 	stopwatchStart := time.Now()
 	//handshake
@@ -131,6 +151,5 @@ func requestServerInfo(conn *net.TCPConn, addr *net.TCPAddr) ([]byte, time.Durat
 	bytesToRead, _ := binary.Uvarint(reply)
 	reply = make([]byte, bytesToRead-3)
 	_, err = conn.Read(reply)
-	stopwatch := time.Since(stopwatchStart)
-	return reply, stopwatch, err
+	return reply, time.Since(stopwatchStart).Milliseconds(), err
 }

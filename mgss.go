@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	ping "github.com/pashanskiy/Minecraft-Go-Scan-Servers/components/ping"
+	ping "github.com/pashanskiy/Minecraft-Go-Scan-Servers/internal/ping"
 )
 
 func main() {
@@ -15,18 +15,19 @@ func main() {
 	if !checkErr(PingServer.GetConnect()) {
 		return
 	}
-	if !checkErr(PingServer.RequestInfoAndUnmarshall()) {
-		return
-	}
-	fmt.Println("Success:", PingServer.ServerData)
+	ServerData, err := PingServer.RequestInfoAndUnmarshall()
 
-
+	if checkErr(err) {
+		fmt.Println("Success:", ServerData)
+		fmt.Println("Ping:", ServerData.Ping)
 	}
 
-	func checkErr(err error) bool {
-		if err != nil {
-			fmt.Println("ERROR:", err)
-			return false
-		}
-		return true
+}
+
+func checkErr(err error) bool {
+	if err != nil {
+		fmt.Println("ERROR:", err)
+		return false
 	}
+	return true
+}
