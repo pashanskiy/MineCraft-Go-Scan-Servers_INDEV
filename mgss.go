@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-
 	ping "github.com/pashanskiy/Minecraft-Go-Scan-Servers/internal/ping"
 )
 
